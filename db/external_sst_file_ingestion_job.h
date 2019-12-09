@@ -95,6 +95,9 @@ class ExternalSstFileIngestionJob {
   // REQUIRES: Mutex held
   void UpdateStats();
 
+  // TODO(heyuchen): hyc test for ingest files
+  void hycIngestPrinter(const std::string &msg);
+
   // Cleanup after successful/failed job
   void Cleanup(const Status& status);
 

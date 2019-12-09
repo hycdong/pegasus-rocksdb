@@ -206,6 +206,11 @@ Status ExternalSstFileIngestionJob::Run() {
   return status;
 }
 
+void ExternalSstFileIngestionJob::hycIngestPrinter(const std::string &msg)
+{
+    ROCKS_LOG_INFO(db_options_.info_log, "hyc: %s", msg.c_str());
+}
+
 void ExternalSstFileIngestionJob::UpdateStats() {
   // Update internal stats for new ingested files
   uint64_t total_keys = 0;
