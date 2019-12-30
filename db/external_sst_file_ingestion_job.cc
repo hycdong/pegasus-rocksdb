@@ -546,6 +546,11 @@ Status ExternalSstFileIngestionJob::AssignGlobalSeqnoForIngestedFile(
   std::string seqno_val;
   PutFixed64(&seqno_val, seqno);
   status = rwfile->Write(file_to_ingest->global_seqno_offset, seqno_val);
+  // TODO(heyuchen): ingestion bug fix in rocksdb pr #3644 (release 5.14.3)
+  // remove this comment after catch up rocksdb 5.14.3
+  if(status.ok()) {
+      status = rwfile->Fsync();
+  }
   if (status.ok()) {
     file_to_ingest->assigned_seqno = seqno;
   }
