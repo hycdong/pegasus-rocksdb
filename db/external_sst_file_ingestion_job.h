@@ -76,7 +76,8 @@ class ExternalSstFileIngestionJob {
         env_options_(env_options),
         db_snapshots_(db_snapshots),
         ingestion_options_(ingestion_options),
-        job_start_time_(env_->NowMicros()) {}
+        job_start_time_(env_->NowMicros()),
+        consumed_seqno_count_(0){}
 
   // Prepare the job by copying external files into the DB.
   Status Prepare(const std::vector<std::string>& external_files_paths);
@@ -104,6 +105,9 @@ class ExternalSstFileIngestionJob {
     return files_to_ingest_;
   }
 
+  // How many sequence numbers did we consume as part of the ingest job
+  int ConsumedSequenceNumbersCount() const { return consumed_seqno_count_; }
+
  private:
   // Open the external file and populate `file_to_ingest` with all the
   // external information we need to ingest this file.
@@ -120,6 +124,7 @@ class ExternalSstFileIngestionJob {
   Status AssignLevelAndSeqnoForIngestedFile(SuperVersion* sv,
                                             bool force_global_seqno,
                                             CompactionStyle compaction_style,
+                                            SequenceNumber last_seqno,
                                             IngestedFileInfo* file_to_ingest,
                                             SequenceNumber* assigned_seqno);
 
@@ -166,6 +171,10 @@ class ExternalSstFileIngestionJob {
   const IngestExternalFileOptions& ingestion_options_;
   VersionEdit edit_;
   uint64_t job_start_time_;
+  // TODO(heyuchen)
+  // rocksdb #5539: assign different seqno for each external sst files
+  // #5539 has already been merged but not released, update this comment after this pr released
+  int consumed_seqno_count_;
 };
 
 }  // namespace rocksdb

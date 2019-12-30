@@ -166,7 +166,7 @@ Status ExternalSstFileIngestionJob::Run() {
   }
   // It is safe to use this instead of LastToBeWrittenSequence since we are
   // the only active writer, and hence they are equal
-  const SequenceNumber last_seqno = versions_->LastSequence();
+  SequenceNumber last_seqno = versions_->LastSequence();
   SuperVersion* super_version = cfd_->GetSuperVersion();
   edit_.SetColumnFamily(cfd_->GetID());
   // The levels that the files will be ingested into
@@ -178,7 +178,7 @@ Status ExternalSstFileIngestionJob::Run() {
     } else {
       status = AssignLevelAndSeqnoForIngestedFile(
          super_version, force_global_seqno, cfd_->ioptions()->compaction_style,
-         &f, &assigned_seqno);
+         last_seqno, &f, &assigned_seqno);
     }
     if (!status.ok()) {
       return status;
@@ -186,8 +186,10 @@ Status ExternalSstFileIngestionJob::Run() {
     status = AssignGlobalSeqnoForIngestedFile(&f, assigned_seqno);
     TEST_SYNC_POINT_CALLBACK("ExternalSstFileIngestionJob::Run",
                              &assigned_seqno);
-    if (assigned_seqno == last_seqno + 1) {
-      consumed_seqno = true;
+    if(assigned_seqno > last_seqno){
+        assert(assigned_seqno == last_seqno + 1);
+        last_seqno = assigned_seqno;
+        ++consumed_seqno_count_;
     }
     if (!status.ok()) {
       return status;
@@ -198,9 +200,11 @@ Status ExternalSstFileIngestionJob::Run() {
                   false);
   }
 
-  if (consumed_seqno) {
-    versions_->SetLastToBeWrittenSequence(last_seqno + 1);
-    versions_->SetLastSequence(last_seqno + 1);
+  int consumed_seqno_count = ConsumedSequenceNumbersCount();
+  if(consumed_seqno_count > 0){
+      const SequenceNumber current_last_seqno = versions_->LastSequence();
+      versions_->SetLastToBeWrittenSequence(current_last_seqno + consumed_seqno_count);
+      versions_->SetLastSequence(current_last_seqno + consumed_seqno_count);
   }
 
   return status;
@@ -250,6 +254,7 @@ void ExternalSstFileIngestionJob::Cleanup(const Status& status) {
                        f.internal_file_path.c_str(), s.ToString().c_str());
       }
     }
+    consumed_seqno_count_ = 0;
   } else if (status.ok() && ingestion_options_.move_files) {
     // The files were moved and added successfully, remove original file links
     for (IngestedFileInfo& f : files_to_ingest_) {
@@ -416,10 +421,10 @@ Status ExternalSstFileIngestionJob::IngestedFilesOverlapWithMemtables(
 
 Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
     SuperVersion* sv, bool force_global_seqno, CompactionStyle compaction_style,
-    IngestedFileInfo* file_to_ingest, SequenceNumber* assigned_seqno) {
+    SequenceNumber last_seqno, IngestedFileInfo* file_to_ingest,
+    SequenceNumber* assigned_seqno) {
   Status status;
   *assigned_seqno = 0;
-  const SequenceNumber last_seqno = versions_->LastSequence();
   if (force_global_seqno) {
     *assigned_seqno = last_seqno + 1;
     if (compaction_style == kCompactionStyleUniversal) {
@@ -427,7 +432,6 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
       return status;
     }
   }
-
   bool overlap_with_db = false;
   Arena arena;
   ReadOptions ro;
@@ -480,6 +484,7 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
       target_level = lvl;
     }
   }
+
  TEST_SYNC_POINT_CALLBACK(
       "ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile",
       &overlap_with_db);
