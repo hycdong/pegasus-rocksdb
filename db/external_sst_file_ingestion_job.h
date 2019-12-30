@@ -80,7 +80,9 @@ class ExternalSstFileIngestionJob {
         consumed_seqno_count_(0){}
 
   // Prepare the job by copying external files into the DB.
-  Status Prepare(const std::vector<std::string>& external_files_paths);
+  // TODO(heyuchen): ingestion bug fix in rocksdb pr #4099 (release 5.16.6)
+  // remove this comment after catch up rocksdb 5.16.6
+  Status Prepare(const std::vector<std::string>& external_files_paths, uint64_t next_file_number);
 
   // Check if we need to flush the memtable before running the ingestion job
   // This will be true if the files we are ingesting are overlapping with any

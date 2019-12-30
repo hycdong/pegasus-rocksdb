@@ -2729,6 +2729,9 @@ Status DBImpl::IngestExternalFile(
     ColumnFamilyHandle* column_family,
     const std::vector<std::string>& external_files,
     const IngestExternalFileOptions& ingestion_options) {
+  if(external_files.empty()){
+    return Status::InvalidArgument("external_files is empty");
+  }
   Status status;
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   auto cfd = cfh->cfd();
@@ -2746,6 +2749,9 @@ Status DBImpl::IngestExternalFile(
                                             immutable_db_options_, env_options_,
                                             &snapshots_, ingestion_options);
 
+  SuperVersionContext dummy_sv_ctx(/* create_superversion */ true);
+  VersionEdit dummy_edit;
+  uint64_t next_file_number = 0;
   std::list<uint64_t>::iterator pending_output_elem;
   {
     InstrumentedMutexLock l(&mutex_);
@@ -2756,9 +2762,26 @@ Status DBImpl::IngestExternalFile(
 
     // Make sure that bg cleanup wont delete the files that we are ingesting
     pending_output_elem = CaptureCurrentFileNumberInPendingOutputs();
+
+    // TODO(heyuchen): ingestion bug fix in rocksdb pr #4099 (release 5.16.6)
+    // remove this comment after catch up rocksdb 5.16.6
+    // If crash happen after a hard link established, Recover function may
+    // reuse the file number that has already assigned to the internal file,
+    // and this will overwrite the external file. To protect the external
+    // file, we have to make sure the file number will never being reused.
+    next_file_number = versions_->FetchAddFileNumber(external_files.size());
+    auto cf_options = cfd->GetLatestMutableCFOptions();
+    status = versions_->LogAndApply(cfd, *cf_options, &dummy_edit, &mutex_, directories_.GetDbDir());
+    if (status.ok()) {
+        InstallSuperVersionAndScheduleWork(cfd, &dummy_sv_ctx, *cf_options);
+    }
+  }
+  dummy_sv_ctx.Clean();
+  if (!status.ok()) {
+    return status;
   }
 
-  status = ingestion_job.Prepare(external_files);
+  status = ingestion_job.Prepare(external_files, next_file_number);
   if (!status.ok()) {
     return status;
   }

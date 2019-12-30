@@ -775,6 +775,13 @@ class VersionSet {
   // Allocate and return a new file number
   uint64_t NewFileNumber() { return next_file_number_.fetch_add(1); }
 
+  // TODO(heyuchen): ingestion bug fix in rocksdb pr #4099 (release 5.16.6)
+  // remove this comment after catch up rocksdb 5.16.6
+  // Fetch And Add n new file number
+  uint64_t FetchAddFileNumber(uint64_t n) {
+      return next_file_number_.fetch_add(n);
+  }
+
   // Return the last sequence number.
   uint64_t LastSequence() const {
     return last_sequence_.load(std::memory_order_acquire);
