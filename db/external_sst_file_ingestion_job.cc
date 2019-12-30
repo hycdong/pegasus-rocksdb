@@ -321,12 +321,16 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
 
     // Set the global sequence number
     file_to_ingest->original_seqno = DecodeFixed64(seqno_iter->second.c_str());
-    file_to_ingest->global_seqno_offset = props->properties_offsets.at(
+    // TODO(heyuchen): ingestion bug fix in rocksdb pr #4098 (release 5.15.10)
+    // remove this comment after catch up rocksdb 5.15.10
+    auto offsets_iter =  props->properties_offsets.find(
         ExternalSstFilePropertyNames::kGlobalSeqno);
-
-    if (file_to_ingest->global_seqno_offset == 0) {
-      return Status::Corruption("Was not able to find file global seqno field");
+    if(offsets_iter == props->properties_offsets.end() ||
+        offsets_iter->second == 0){
+        file_to_ingest->global_seqno_offset = 0;
+        return Status::Corruption("Was not able to find file global seqno field");
     }
+    file_to_ingest->global_seqno_offset = offsets_iter->second;
   } else if (file_to_ingest->version == 1) {
     // SST file V1 should not have global seqno field
     assert(seqno_iter == uprops.end());
