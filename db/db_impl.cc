@@ -2758,16 +2758,10 @@ Status DBImpl::IngestExternalFile(
     pending_output_elem = CaptureCurrentFileNumberInPendingOutputs();
   }
 
-  // TODO(heyuchen): delete it
-  ingestion_job.hycIngestPrinter("start to prepare " + external_files[0]);
-
   status = ingestion_job.Prepare(external_files);
   if (!status.ok()) {
     return status;
   }
-
-  // TODO(heyuchen): delete it
-  ingestion_job.hycIngestPrinter("start to add file " + external_files[0]);
 
   SuperVersionContext sv_context(/* create_superversion */ true);
   TEST_SYNC_POINT("DBImpl::AddFile:Start");
